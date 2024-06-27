@@ -89,6 +89,22 @@ vector<uint> RunMe(vector<vector<double>>& collection,
 
     // cout << "cudaMalloc success" << endl;
 
+    // Allocate host memory
+    double* h_collection = new double[collection.size() * collection[0].size()];
+
+    // Copy data from device to host
+    err = cudaMemcpy(h_collection, d_collection,
+                     sizeof(double) * collection.size() * collection[0].size(),
+                     cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        cout << "cudaMemcpy for h_collection failed: "
+             << cudaGetErrorString(err) << endl;
+        delete[] h_collection;
+        return bestmatches;
+    }
+
+    auto start2 = clock();
+
     // 找到 testcollection 中每个元素在 collection 中的最佳匹配
     for (uint k = 0; k < testcollection.size(); ++k) {
         NN n(testcollection[k],
@@ -96,28 +112,11 @@ vector<uint> RunMe(vector<vector<double>>& collection,
         double current = n.getLowestCost();
         uint bestmatch = 0;
         for (uint z = 0; z < collection.size(); ++z) {
-            // cout << "build d_collection begin" << endl;
-            // Allocate host memory
-            double* h_collection = new double[collection[0].size()];
-
-            // Copy data from device to host
-            cudaError_t err = cudaMemcpy(
-                h_collection, d_collection + z * collection[0].size(),
-                sizeof(double) * collection[0].size(), cudaMemcpyDeviceToHost);
-            if (err != cudaSuccess) {
-                cout << "cudaMemcpy for h_collection failed: "
-                     << cudaGetErrorString(err) << endl;
-                delete[] h_collection;
-                return bestmatches;
-            }
-
             // Create vector from host memory
             std::vector<double> d_collection_vec(
-                h_collection, h_collection + collection[0].size());
+                h_collection + z * collection[0].size(),
+                h_collection + (z + 1) * collection[0].size());
 
-            // Free host memory
-            delete[] h_collection;
-            // cout << "build d_collection end" << endl;
             double newc = n.test(d_collection_vec);
             if (newc < current) {  // best candidate so far
                 current = newc;
@@ -126,6 +125,17 @@ vector<uint> RunMe(vector<vector<double>>& collection,
         }
         bestmatches.push_back(bestmatch);
     }
+
+    // 获取当前时间
+    auto finish2 = clock();
+
+    // 计算时间差
+    std::cout << "collection match time = "
+              << static_cast<double>(finish2 - start2) / CLOCKS_PER_SEC
+              << " s\n";
+
+    // Free host memory
+    delete[] h_collection;
     cout << "cuda Free begin..." << endl;
     cudaFree(d_collection);
     cudaFree(d_test);
