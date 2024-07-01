@@ -278,10 +278,9 @@ EXEC ?= @echo "[@]"
 endif
 
 ################################################################################
-
 # Target rules
 
-all: unittesting benchmark benchmark_cuda example
+all: unittesting benchmark main example dtw_cuda
 OSNAME = $(shell uname | tr "[:upper:]" "[:lower:]")
 SHAREDNAME=$(shell if [  $(OSNAME) = "darwin" ]; then echo -n "   -bundle -flat_namespace -undefined suppress"; else echo -n "-shared";fi )
 
@@ -297,18 +296,30 @@ example: examples/example.cpp include/dtw.h
 unittesting: tests/unittesting.cpp include/dtw.h 
 	$(CXX) -g3 -Wall -Wold-style-cast  -Woverloaded-virtual -o unittesting tests/unittesting.cpp -Iinclude
 
-# benchmark_cuda: benchmarks/benchmark_cuda.cpp include/dtw.h
-	# $(CXX) -O2 -Wall -Wold-style-cast  -Woverloaded-virtual -o benchmark_cuda benchmarks/benchmark_cuda.cpp  -Iinclude
+# benchmark_cuda.o: benchmarks/benchmark_cuda.cpp include/dtw.h 
+# 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c  -Iinclude $<
 
-benchmark_cuda.o: benchmarks/benchmark_cuda.cpp include/dtw.h 
+# benchmark_cuda: benchmark_cuda.o
+# 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
+# 	$(EXEC) mkdir -p ../../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
+# 	$(EXEC) cp $@ ../../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
+
+# Compile dtw_cuda.cu
+dtw_cuda.o: benchmarks/dtw_cuda.cu include/dtw_cuda.h
 	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c  -Iinclude $<
 
-benchmark_cuda: benchmark_cuda.o
+dtw_cuda: dtw_cuda.o
 	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
 	$(EXEC) mkdir -p ../../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 	$(EXEC) cp $@ ../../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 
+main_cuda.o: benchmarks/main.cu include/dtw_cuda.h 
+	$(EXEC) $(NVCC) $(INCLUDES) $(ALL_CCFLAGS) $(GENCODE_FLAGS) -o $@ -c  -Iinclude $<
 
+main: main_cuda.o dtw_cuda.o
+	$(EXEC) $(NVCC) $(ALL_LDFLAGS) $(GENCODE_FLAGS) -o $@ $+ $(LIBRARIES)
+	$(EXEC) mkdir -p ../../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
+	$(EXEC) cp $@ ../../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)
 
 clean :
 	rm -f benchmark unittesting example
